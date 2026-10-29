@@ -1,0 +1,8 @@
+{
+  "count": 50,
+  "total_seconds": 3.5008770000422373,
+  "mean_seconds": 0.07001754000084474,
+  "p95_seconds": 0.11489770002663136,
+  "within_150_seconds": true,
+  "threshold": -0.8335624933242798
+}

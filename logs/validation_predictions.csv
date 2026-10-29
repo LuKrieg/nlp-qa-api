@@ -1,0 +1,33 @@
+id,prediction,references,answerable,em,f1
+5ad562525b96ef001a10ad53,null,"[""""]",False,1.0,1.0
+572ff430a23a5019007fcba9,null,"[""Lower Rhine"", ""Lower"", ""Lower Rhine""]",True,0.0,0.0
+57263eaa38643c19005ad373,null,"[""water flow through the body cavity"", ""\u03ba\u03c4\u03b5\u03af\u03c2 kteis 'comb' and \u03c6\u03ad\u03c1\u03c9 pher\u014d 'carry'"", ""water flow through the body cavity""]",True,0.0,0.0
+5725cbb289a1e219009abed4,null,"[""diseases from Europe"", ""the spread of diseases from Europe"", ""spread of diseases from Europe""]",True,0.0,0.0
+572ff626947a6a140053ce91,null,"[""poles"", ""two poles"", ""poles""]",True,0.0,0.0
+572fe288a23a5019007fcadb,null,"[""Rhijn"", ""Rhijn"", ""Rhijn"", ""Rhijn"", ""Rhijn""]",True,0.0,0.0
+5ad268cbd7d075001a429295,null,"[""""]",False,1.0,1.0
+57287c2bff5b5019007da26d,null,"[""means to invest"", ""the means to invest in new sources of creating wealth or to otherwise leverage the accumulation of wealth"", ""means to invest in new sources of creating wealth""]",True,0.0,0.0
+5ad3bd8f604f3c001a3fef30,null,"[""""]",False,1.0,1.0
+572fc6f204bcaa1900d76cf5,null,"[""committee"", ""committee"", ""in committee""]",True,0.0,0.0
+5ad266f8d7d075001a429207,null,"[""""]",False,1.0,1.0
+5726431aec44d21400f3dd14,null,"[""connect host computers (servers)at thousands of large companies, educational institutions, and government agencies"", ""host computers (servers)at thousands of large companies, educational institutions, and government agencies"", ""host computers""]",True,0.0,0.0
+572a07fc6aef0514001551dc,null,"[""immunoglobulins and T cell receptors"", ""immunoglobulins and T cell receptors"", ""immunoglobulins""]",True,0.0,0.0
+573792ee1c456719005744ba,null,"[""quantum mechanics"", ""quantum mechanics"", ""quantum mechanics"", ""the work of leading theoretical physicists""]",True,0.0,0.0
+5a89320b3b2508001a72a50d,null,"[""""]",False,1.0,1.0
+5725c95f38643c19005accf5,null,"[""agriculture"", ""agriculture"", ""agriculture""]",True,0.0,0.0
+5ad0313b77cf76001a686dd2,null,"[""""]",False,1.0,1.0
+56e1c9bfe3433e1400423194,null,"[""reduces"", ""reduces"", ""X reduces to Y""]",True,0.0,0.0
+5ad2472bd7d075001a428b23,null,"[""""]",False,1.0,1.0
+5ad54d625b96ef001a10ac64,null,"[""""]",False,1.0,1.0
+5a551a65134fea001a0e1920,null,"[""""]",False,1.0,1.0
+572864542ca10214002da2df,Maynard Hutchin,"[""NCAA's Division III"", ""NCAA's Division III""]",True,0.0,0.0
+5ad21e1ad7d075001a42846f,null,"[""""]",False,1.0,1.0
+5a7b3b3121c2de001afe9dee,null,"[""""]",False,1.0,1.0
+5ad3a01a604f3c001a3fe974,null,"[""""]",False,1.0,1.0
+5ad243abd7d075001a428a10,null,"[""""]",False,1.0,1.0
+5ad566375b96ef001a10adcf,null,"[""""]",False,1.0,1.0
+5726a14c708984140094cc53,null,"[""a proper legal basis"", ""a proper legal basis"", ""a proper legal basis""]",True,0.0,0.0
+5a838553e60761001a2eb75a,null,"[""""]",False,1.0,1.0
+57373f80c3c5551400e51e93,null,"[""friction"", ""friction"", ""gravity"", ""friction"", ""friction"", ""force""]",True,0.0,0.0
+5733140a4776f419006606e1,null,"[""Krak\u00f3w"", ""Krak\u00f3w"", ""Krak\u00f3w""]",True,0.0,0.0
+5ad0322877cf76001a686dfd,null,"[""""]",False,1.0,1.0

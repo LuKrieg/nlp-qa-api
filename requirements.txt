@@ -1,0 +1,6 @@
+torch
+transformers>=4.45,<5
+datasets>=3,<5
+accelerate>=1,<2
+numpy
+matplotlib

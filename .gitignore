@@ -4,6 +4,7 @@
 pytorch_model.*
 model_weights/
 weights/
+data/
 
 # Variables de entorno y tokens de seguridad (QA_API_TOKEN)
 .env
