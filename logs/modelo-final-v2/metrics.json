@@ -1,0 +1,23 @@
+{
+  "model": "distilbert-base-uncased",
+  "train_examples": 40000,
+  "validation_examples": 3000,
+  "epochs": 2,
+  "learning_rate": 3e-05,
+  "batch_size": 4,
+  "gradient_accumulation_steps": 4,
+  "max_length": 384,
+  "doc_stride": 128,
+  "training_seconds": 1532.9418501853943,
+  "no_answer_threshold": 1.5016899108886719,
+  "answerable": {
+    "count": 742,
+    "EM": 45.82210242587601,
+    "F1": 50.27846200852593
+  },
+  "unanswerable": {
+    "count": 758,
+    "EM": 73.21899736147758,
+    "F1": 73.21899736147758
+  }
+}
