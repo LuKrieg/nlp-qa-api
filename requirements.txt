@@ -4,3 +4,5 @@ datasets>=3,<5
 accelerate>=1,<2
 numpy
 matplotlib
+fastapi>=0.100,<1
+uvicorn[standard]>=0.20
