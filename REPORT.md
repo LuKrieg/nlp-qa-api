@@ -10,6 +10,7 @@
 | `submission` commit hash | The commit tagged `submission` (a report cannot contain the hash of its own commit). |
 | Public service URL used at the dry run | `https://diffusion-briskly-craftily.ngrok-free.dev (fixed ngrok domain)` |
 | AI tools used (which, and for what) | `FILL: the team must disclose every AI tool used and for what` |
+ChatGPT (OpenAI): technical guidance, code development and debugging, assistance with DistilBERT training and CPU inference, FastAPI integration, testing, documentation, and deployment troubleshooting. Google Antigravity: AI-assisted development environment used for code implementation, review, and debugging.
 
 ## 1. Model choice and justification
 
@@ -73,11 +74,11 @@ sample-04 asks about BERT-base while the context reports LoRA results for GPT-3:
 | Parameters | 66,364,418 |
 | Size on disk | 253 MiB (`model.safetensors`, 265 MB) |
 | Mean latency per `/predict` request on your laptop (CPU) | 96 ms mean, 327 ms max over the 5 public samples through local HTTP (the 3-window sample takes about 320 ms). Measured on the development machine, not yet on the serving laptop. |
-| Laptop CPU and RAM | `FILL: serving laptop CPU and RAM` (development machine: AMD Ryzen 7 9800X3D, 8 cores, 24 GB RAM allocated to WSL) |
+ | Laptop CPU and RAM | **Option 1 — :** Intel Core Ultra 7 255HX, 31.43 GiB usable physical RAM (approximately 32 GB installed). **Option 2 — Development machine:** AMD Ryzen 7 9800X3D, 8 cores, 24 GB RAM allocated to WSL. Final serving machine to be confirmed before evaluation.  |
 
 ## 7. Problems encountered and how you fixed them
 
-1. **Problem:** v2 (trained on 40,000 of 130,319 questions) answered the contract's example "How long is the Lempa River?" with "longest" and scored 0.58 on our 48-question set. **Cause:** too little training data. **Fix:** retrained on the full SQuAD 2.0 train set and re-calibrated the threshold; the set score rose to 0.77. **Commit:** `FILL: commit hash`
+1. **Problem:** v2 (trained on 40,000 of 130,319 questions) answered the contract's example "How long is the Lempa River?" with "longest" and scored 0.58 on our 48-question set. **Cause:** too little training data. **Fix:** retrained on the full SQuAD 2.0 train set and re-calibrated the threshold; the set score rose to 0.77. **Commit:** `bb13389`
 2. **Problem:** a 500-character question made the API return `500`. **Cause:** the tokenizer fails when the question leaves no room for the context. **Fix:** questions are clipped to 96 tokens (`inference.py`). **Commit:** `FILL: commit hash`
 3. **Problem:** an invalid JSON body without token returned `422` instead of `401`, and an unset `QA_API_TOKEN` accepted the header `Bearer `. **Cause:** FastAPI parses the body before dependencies, and the expected token was empty. **Fix:** authentication is answered first and fails closed. **Commit:** `FILL: commit hash`
 4. **Problem:** the repository held a duplicated `.git - Copy/` folder, Windows-only paths and a hard-coded default test token in the tests. **Cause:** files copied between machines. **Fix:** removed in a new commit (history preserved); tests now require `QA_API_TOKEN` and use relative paths. **Commit:** `FILL: commit hash`
