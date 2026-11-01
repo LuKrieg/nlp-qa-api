@@ -9,8 +9,8 @@
 | Repository URL | https://github.com/LuKrieg/nlp-qa-api |
 | `submission` commit hash | The commit tagged `submission` (a report cannot contain the hash of its own commit). |
 | Public service URL used at the dry run | `https://diffusion-briskly-craftily.ngrok-free.dev (fixed ngrok domain)` |
-| AI tools used (which, and for what) | `FILL: the team must disclose every AI tool used and for what` |
-ChatGPT (OpenAI): technical guidance, code development and debugging, assistance with DistilBERT training and CPU inference, FastAPI integration, testing, documentation, and deployment troubleshooting. Google Antigravity: AI-assisted development environment used for code implementation, review, and debugging.
+| AI tools used (which, and for what) | `ChatGPT (OpenAI): technical guidance, code development and debugging, assistance with DistilBERT training and CPU inference, FastAPI integration, testing, documentation, and deployment troubleshooting. Google Antigravity: AI-assisted development environment used for code implementation, review, and debugging.` |
+
 
 ## 1. Model choice and justification
 
