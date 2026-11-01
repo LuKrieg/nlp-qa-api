@@ -74,7 +74,7 @@ sample-04 asks about BERT-base while the context reports LoRA results for GPT-3:
 | Parameters | 66,364,418 |
 | Size on disk | 253 MiB (`model.safetensors`, 265 MB) |
 | Mean latency per `/predict` request on your laptop (CPU) | 96 ms mean, 327 ms max over the 5 public samples through local HTTP (the 3-window sample takes about 320 ms). Measured on the development machine, not yet on the serving laptop. |
- | Laptop CPU and RAM | **Option 1 — :** Intel Core Ultra 7 255HX, 31.43 GiB usable physical RAM (approximately 32 GB installed). **Option 2 — Development machine:** AMD Ryzen 7 9800X3D, 8 cores, 24 GB RAM allocated to WSL. Final serving machine to be confirmed before evaluation.  |
+ | Laptop CPU and RAM | **Option 1 (ideal)  — :** Intel Core Ultra 7 255HX, 31.43 GiB usable physical RAM (approximately 32 GB installed). **Option 2 — Development machine:** AMD Ryzen 7 9800X3D, 8 cores, 24 GB RAM allocated to WSL. Final serving machine to be confirmed before evaluation.  |
 
 ## 7. Problems encountered and how you fixed them
 
