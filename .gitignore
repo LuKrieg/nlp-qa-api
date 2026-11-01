@@ -1,10 +1,11 @@
-# Pesos del modelo y artefactos grandes
+# Pesos del modelo y artefactos grandes (se distribuyen fuera de git)
 *.bin
 *.safetensors
 pytorch_model.*
 model_weights/
 weights/
 data/
+*.zip
 
 # Variables de entorno y tokens de seguridad (QA_API_TOKEN)
 .env
@@ -14,5 +15,20 @@ data/
 __pycache__/
 venv/
 .venv/
+.venv*/
 *.pyc
 .ipynb_checkpoints/
+.pytest_cache/
+
+# Salidas locales y logs temporales (los logs/ versionados no se ignoran)
+out/
+*.log
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*~

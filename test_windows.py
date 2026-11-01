@@ -3,17 +3,10 @@ import json
 from pathlib import Path
 from inference import QAInference
 
-SAMPLE_PATH = Path(r"C:\Users\andre\Desktop\Semana 10 y 11 - NLP + APIs\public_sample.json")
+SAMPLE_PATH = Path(__file__).resolve().parent / "samples" / "public_sample.json"
 
 def main():
-    if not SAMPLE_PATH.exists():
-        # Fallback to local if copied
-        local_path = Path("public_sample.json")
-        sample_file = local_path if local_path.exists() else SAMPLE_PATH
-    else:
-        sample_file = SAMPLE_PATH
-
-    data = json.loads(sample_file.read_text(encoding="utf-8"))
+    data = json.loads(SAMPLE_PATH.read_text(encoding="utf-8"))
     sample_05 = next(item for item in data["items"] if item["id"] == "sample-05")
     context = sample_05["context"]
     question = sample_05["question"]

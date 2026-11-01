@@ -4,80 +4,97 @@
 
 | Field | Value |
 |---|---|
-| Team id | `TBD` |
-| Members | `TBD` |
-| Repository URL | https://github.com/jrivera937/nlp-qa-api |
-| `submission` commit hash | `TBD` |
-| Public service URL used at the dry run | `TBD` |
-| AI tools used (which, and for what) | OpenAI Codex: repository scaffolding and training-script drafting; team must verify and disclose all tools used. |
+| Team id | `FILL: team name registered with the instructor (no spaces)` |
+| Members | Oliver, Camila, Enrique, Lucy `FILL: full names` |
+| Repository URL | https://github.com/LuKrieg/nlp-qa-api |
+| `submission` commit hash | The commit tagged `submission` (a report cannot contain the hash of its own commit). |
+| Public service URL used at the dry run | `FILL: tunnel URL used at the dry run` |
+| AI tools used (which, and for what) | `FILL: the team must disclose every AI tool used and for what` |
 
 ## 1. Model choice and justification
 
-- **Base checkpoint:** `distilbert/distilbert-base-uncased`. It is a compact encoder checkpoint intended for general language understanding, not a SQuAD-fine-tuned QA checkpoint. The training script adds a QA head and fine-tunes it on SQuAD 2.0. DistilBERT is selected as a CPU-serving candidate; the required 50-question/150-second limit still needs measurement on the team's laptop.
-- **Alternatives considered:** `roberta-base` and `microsoft/deberta-v3-base` are larger candidates with potentially stronger QA quality, but greater CPU latency and memory costs. No measured comparison has been run for this project.
-- **Trade-off:** The smaller DistilBERT encoder favors model footprint and CPU throughput. The pilot artifact processed 50 official validation questions in 3.50 seconds on CPU (model inference only); the API overhead and public sample set still need measurement.
+- **Base checkpoint:** `distilbert/distilbert-base-uncased` (66,364,418 parameters). It is a general pre-trained encoder, not fine-tuned on SQuAD; we add a span-prediction head and fine-tune it ourselves.
+- **Alternatives considered:** `roberta-base` and `microsoft/deberta-v3-base` usually score higher on SQuAD 2.0 but are larger and slower. We excluded them on expected CPU latency; we did not benchmark them.
+- **Trade-off:** DistilBERT needs about 35–100 ms per 384-token window on CPU (measured on a Ryzen 7 9800X3D; a laptop will be slower), far below the 5 s cap. A larger encoder would add quality headroom on non-SQuAD text at a CPU cost we could not verify.
 
 ## 2. Training
 
 | Item | Value |
 |---|---|
-| Training data (full SQuAD 2.0 train or subset; how many examples) | Official SQuAD 2.0 train split; pilot run used a seeded, proportion-preserving subset of 64 examples. |
-| Validation data (what you validated on, how many examples) | Official SQuAD 2.0 validation split; pilot run used a seeded subset of 32 examples. |
-| Epochs | 1 (pilot run; configurable) |
-| Learning rate and schedule (warmup?) | 3e-5, linear Trainer schedule, 10% warmup |
-| Batch size | 8 |
-| `max_seq_length` / `doc_stride` | 128 / 32 (pilot run) |
-| Hardware and training time | CPU-only; 30.06 seconds. Record exact CPU/RAM before final submission. |
+| Training data | Full SQuAD 2.0 train split: 130,319 questions (131,754 windows), about 1/3 unanswerable. |
+| Validation data | Full SQuAD 2.0 dev split: 11,873 questions (12,134 windows). |
+| Epochs | 3 |
+| Learning rate and schedule (warmup?) | 5e-5, linear decay, 10% warmup, AdamW (weight decay 0.01), gradient clipping 1.0 |
+| Batch size | 32 |
+| `max_seq_length` / `doc_stride` | 384 / 128 |
+| Hardware and training time | Single GPU with bfloat16 autocast; 886 s for 3 epochs. Serving is CPU-only. |
 
-- **Loss curve:** [logs/loss_curves.png](logs/loss_curves.png), generated from the pilot run.
-- **Validation results:** The 32-example pilot produced answerable EM/F1 0.00/0.00 (16 examples) and unanswerable EM/F1 100.00/100.00 (16 examples). This is a smoke-run result, not a representative quality estimate; rerun with a larger sample before submission.
-
-Create the environment with `python -m venv .venv`, install with `.venv/Scripts/python -m pip install -r requirements.txt`, then run `.venv/Scripts/python train.py --train-limit 12000 --eval-limit 3000 --epochs 2` and `.venv/Scripts/python plot_training.py`. The script downloads official SQuAD 2.0 JSON splits into `data/` and writes model files under `weights/` and logs under `logs/`. It uses a PyTorch loop because Windows Application Control blocked pandas, which the Hugging Face Trainer/datasets stack imports in this environment.
+- **Loss curve:** [logs/modelo-final-v3/loss.png](logs/modelo-final-v3/loss.png). Training loss fell from 5.7 to 0.65. Validation loss was 1.352, 1.336 and 1.467 after epochs 1–3: it rose in the last epoch, a sign of mild overfitting.
+- **Validation results (full dev set, served threshold −1.0):** answerable EM 69.8%, correct `null` on unanswerable 58.8%. At the training-time threshold (−3.34): answerable EM 73.7%, F1 81.2%, unanswerable 49.6% (held-out half).
 
 ## 3. No-answer threshold
 
-The QA head scores candidate answer spans and the CLS null span. The validation script computes `best_non_null_score - null_score`; it chooses the threshold with the highest validation F1. The pilot threshold was `-0.8336`; recalibrate on a much larger validation subset before submission. A threshold that is too high returns too many nulls; a threshold that is too low returns unsupported spans for unanswerable questions.
+- **Decision:** we take the best span over all windows and compare `margin = best_span_score − null_score` (`null_score` = start and end logits at `[CLS]`, as in `train.py` and `inference.py`). The service returns `null` when `margin <= threshold`.
+- **Value:** we swept the threshold over all dev margins. The score is flat between −3.3 and −1.0 (about 0.67 at 25% unanswerable, the hidden-test share). We chose **−1.0**: it loses about 0.003 against the optimum and gives more correct `null` answers, protecting against adversarial questions. It is stored in `metrics.json` next to the weights.
+- **Too low or too high:** a low threshold answers unanswerable questions with unsupported spans; a high one returns `null` for answerable ones. On our 48-question set answerable EM goes from 0.83 at −2 to 0.75 at +3, while unanswerable accuracy goes from 0.67 to 0.92.
 
 ## 4. Serving architecture
 
-- **Framework and server:** `TBD (not present in the starter repository)`.
-- **Model loading:** `TBD`.
-- **Request flow:** `TBD`.
-- **Access control:** `TBD`.
-- **Tunnel:** `TBD`.
-- **How to run from a clean machine:** `TBD: document the verified API setup, dependencies, and environment variables.`
+- **Framework and server:** FastAPI + uvicorn, one worker, port 8000 (`api.py`).
+- **Model loading:** a background thread loads the model once at start-up and runs a warm-up prediction. `/health` returns `503 {"status":"loading"}` until then, and `200 {"status":"ok"}` after.
+- **Request flow:** `/predict` checks the token, validates the body (extra fields rejected), splits question and context into overlapping 384-token windows (stride 128), runs DistilBERT on CPU, keeps the best span per window (up to 30 tokens), picks the window with the highest margin and applies the threshold. Offsets map back to the original string, so `context[start:start+len(answer)] == answer` always holds. Questions over 96 tokens are clipped.
+- **Access control:** `require_auth` runs before body validation. The token comes only from `QA_API_TOKEN`, compared with `hmac.compare_digest`; an unset or empty variable rejects every request with `401 {"error":"unauthorized"}`. `/health` is public.
+- **Tunnel:** ngrok (`ngrok http 8000`) as primary and Cloudflare Quick Tunnel (`cloudflared tunnel --url http://localhost:8000`) as backup. `FILL: confirm both after the dry run`.
+- **How to run** from a clean machine (details in `README.md`; weights are distributed outside git):
+
+```bash
+uv venv .venv && uv pip install --python .venv/bin/python -r requirements-serve.txt
+export QA_API_TOKEN=<token> TEAM_NAME=<team>
+./run.sh        # or run.ps1 on Windows; serves on 0.0.0.0:8000
+python smoke_test.py http://localhost:8000 --extended
+```
 
 ## 5. Results on the public sample set
 
 | Item | Expected | Your answer | `start` | Correct? |
 |---|---|---|---|---|
-| sample-01 | `TBD: from assignment sample` | `TBD` | `TBD` | `TBD` |
-| sample-02 | `TBD: from assignment sample` | `TBD` | `TBD` | `TBD` |
-| sample-03 | `null` | `TBD` | `TBD` | `TBD` |
-| sample-04 | `null` | `TBD` | `TBD` | `TBD` |
-| sample-05 | `TBD: from assignment sample` | `TBD` | `TBD` | `TBD` |
+| sample-01 | `16` | `16` | 383 | Yes |
+| sample-02 | `3.5 days` | `3.5 days` | 437 | Yes |
+| sample-03 | `null` | `null` | `null` | Yes |
+| sample-04 | `null` | `3 times` | 310 | No |
+| sample-05 | `50,257` | `50,257` | 3157 | Yes |
 
-No public sample set was present in the repository, so no sample answers or correctness results are claimed.
+sample-04 asks about BERT-base while the context reports LoRA results for GPT-3: a false premise using words from the context. The model returns a plausible span with margin 1.82, above the threshold. Correct answers elsewhere have margins of 6.4–9.2, so a threshold near 2 would fix this item, but we did not tune to one item: on SQuAD dev it costs about 0.025 of team score.
 
 ## 6. Model size and latency (not graded)
 
 | Item | Value |
 |---|---|
-| Parameters | `TBD: inspect saved model` |
-| Size on disk | 254.07 MB |
-| Mean latency per `/predict` request on your laptop (CPU) | 0.070 seconds per local model call for 50 official validation questions (3.50 seconds total); this measures model inference, not API overhead. |
-| Laptop CPU and RAM | `TBD` |
+| Parameters | 66,364,418 |
+| Size on disk | 253 MiB (`model.safetensors`, 265 MB) |
+| Mean latency per `/predict` request on your laptop (CPU) | 96 ms mean, 327 ms max over the 5 public samples through local HTTP (the 3-window sample takes about 320 ms). Measured on the development machine, not yet on the serving laptop. |
+| Laptop CPU and RAM | `FILL: serving laptop CPU and RAM` (development machine: AMD Ryzen 7 9800X3D, 8 cores, 24 GB RAM allocated to WSL) |
 
 ## 7. Problems encountered and how you fixed them
 
-1. **Problem:** `TBD: record a real implementation problem.` **Cause:** `TBD` **Fix:** `TBD` **Commit:** `TBD`
-2. **Problem:** `TBD: record a second real implementation problem.` **Cause:** `TBD` **Fix:** `TBD` **Commit:** `TBD`
+1. **Problem:** v2 (trained on 40,000 of 130,319 questions) answered the contract's example "How long is the Lempa River?" with "longest" and scored 0.58 on our 48-question set. **Cause:** too little training data. **Fix:** retrained on the full SQuAD 2.0 train set and re-calibrated the threshold; the set score rose to 0.77. **Commit:** `FILL: commit hash`
+2. **Problem:** a 500-character question made the API return `500`. **Cause:** the tokenizer fails when the question leaves no room for the context. **Fix:** questions are clipped to 96 tokens (`inference.py`). **Commit:** `FILL: commit hash`
+3. **Problem:** an invalid JSON body without token returned `422` instead of `401`, and an unset `QA_API_TOKEN` accepted the header `Bearer `. **Cause:** FastAPI parses the body before dependencies, and the expected token was empty. **Fix:** authentication is answered first and fails closed. **Commit:** `FILL: commit hash`
+4. **Problem:** the repository held a duplicated `.git - Copy/` folder, Windows-only paths and a hard-coded default test token in the tests. **Cause:** files copied between machines. **Fix:** removed in a new commit (history preserved); tests now require `QA_API_TOKEN` and use relative paths. **Commit:** `FILL: commit hash`
 
 ## 8. Decoder investigation
 
-1. **Problem:** Extractive QA can only return text that appears as one contiguous context span. A GPT-style decoder could generate a concise answer or normalize a discontinuous fact, but could also produce unsupported text; grounding and answerability checks would be needed. It would cost more CPU time and memory, so the 150-second limit would need a fresh benchmark.
-2. **Problem:** The encoder QA head's null threshold may confuse answerable and unanswerable questions. A decoder could be prompted to abstain explicitly, but abstention is not guaranteed and requires calibration against the same held-out set. Generation would add latency and model-size costs.
+Decoders are not allowed for the implementation: they are slow on a laptop CPU, their generated answers do not fit exact-match evaluation, and the time frame does not allow doing both well. We analysed how a decoder (GPT-style, Radford et al., 2018) or an encoder–decoder would address the problems we found.
+
+1. **False-premise unanswerable question (sample-04).** Our model returns "3 times" with margin 1.82 (measured), while correct answers have margins of 6.4–9.2; the threshold was calibrated on SQuAD dev (about 50% unanswerable) but the hidden set is about 25% and not from SQuAD (Rajpurkar et al., 2018). A generative model could check the premise and emit an explicit "no answer", but abstention still needs held-out calibration.
+2. **Partial or non-span answers.** For "How long is the Lempa River?" we return "422 km", not "about 422 km" (measured), and spans cannot answer yes/no questions or merge facts across sentences. A decoder can generate "about 422 km" or "yes", but not necessarily verbatim, so `start` would need post-hoc alignment and exact match could drop.
+3. **Cost.** We serve 66.4M parameters (253 MiB) with one forward pass per 384-token window (measured). A useful decoder has roughly 350M–1B parameters and one pass per generated token (estimate). LoRA (Hu et al., 2021) reduces fine-tuning memory, not inference latency against the 5 s cap.
 
 ## 9. Known limitations
 
-The pilot completed training and validation but used only 64 train and 32 validation examples with 128-token sequences; its answerable score is not useful as a final model-quality claim. The repository still has no serving API, so `/predict`, authentication, tunnel, and public sample results remain to be implemented or supplied by the team. The 50-question CPU benchmark measured model inference only, not HTTP/API overhead. The default training run is larger and requires substantial CPU time. Weights are local and ignored by Git; upload them to a GitHub Release or shared folder before submission.
+- False-premise unanswerable questions are still answered (sample-04; 4 of 6 in our own set).
+- Answers can be partial spans ("422 km" instead of "about 422 km").
+- Answers are one contiguous span: no yes/no, generated or merged answers.
+- Quality on non-SQuAD text is estimated only from our 48-question set and the 5 public samples.
+- An answer crossing a window boundary can be cut; long contexts cost more time (about 320 ms for 3 windows).
+- One worker handles one request at a time, and the service is reachable only while the laptop, server and tunnel run.

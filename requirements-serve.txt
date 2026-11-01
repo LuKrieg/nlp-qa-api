@@ -1,0 +1,14 @@
+# Minimal CPU serving dependencies for api.py + inference.py.
+# Pins match the versions tested in the serving venv (Python 3.12).
+#
+# torch: install the CPU-only wheel (no CUDA download) from the PyTorch CPU index:
+#   uv pip install -r requirements-serve.txt --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match
+#   python -m pip install -r requirements-serve.txt --extra-index-url https://download.pytorch.org/whl/cpu
+# On Windows and macOS the default PyPI torch wheel is already CPU-only.
+torch>=2.4,<3
+
+transformers==4.57.6
+numpy==2.5.4
+fastapi==0.162.0
+pydantic==2.14.2
+uvicorn[standard]==0.54.0

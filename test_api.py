@@ -1,34 +1,36 @@
 # -*- coding: utf-8 -*-
-"""Integration tests for api.py.
+"""Integration tests for api.py (standard library only).
 
-Starts the FastAPI server in a background process, waits for /health to
-return 200, runs all test cases, then shuts the server down.
+Starts the FastAPI server in a background process on 127.0.0.1:8000, waits for
+/health to return 200, runs all test cases, then shuts the server down.
+Do not run it while another server is already listening on port 8000.
 
 Usage
 -----
-    $env:QA_API_TOKEN = "dev-token"
-    .\.venv\Scripts\python.exe test_api.py
+    export QA_API_TOKEN=<token>           # PowerShell: $env:QA_API_TOKEN = "<token>"
+    python test_api.py
 """
 import json
 import os
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
-import httpx
-
+PROJECT_ROOT = Path(__file__).resolve().parent
 BASE_URL = "http://127.0.0.1:8000"
-TOKEN = os.environ.get("QA_API_TOKEN", "dev-token")
+PUBLIC_SAMPLES_PATH = PROJECT_ROOT / "samples" / "public_sample.json"
+
+TOKEN = os.environ.get("QA_API_TOKEN", "")
+if not TOKEN:
+    sys.exit("QA_API_TOKEN is not set. Set it first, e.g. export QA_API_TOKEN=<token> "
+             "(PowerShell: $env:QA_API_TOKEN = \"<token>\"), then rerun.")
+
 WRONG_TOKEN = "wrong-token-xyz"
 AUTH_HEADERS = {"Authorization": "Bearer " + TOKEN}
 WRONG_HEADERS = {"Authorization": "Bearer " + WRONG_TOKEN}
-
-PUBLIC_SAMPLES_PATH = Path(
-    r"C:\Users\andre\Desktop\Semana 10 y 11 - NLP + APIs\public_sample.json"
-)
-
-VENV_PYTHON = str(Path(__file__).resolve().parent / ".venv" / "Scripts" / "python.exe")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -37,8 +39,33 @@ VENV_PYTHON = str(Path(__file__).resolve().parent / ".venv" / "Scripts" / "pytho
 results: list = []
 
 
+class Response:
+    def __init__(self, status_code: int, text: str):
+        self.status_code = status_code
+        self.text = text
+
+    def json(self) -> dict:
+        try:
+            return json.loads(self.text)
+        except ValueError:
+            return {}
+
+
+def request(method: str, path: str, headers: dict = None, body: dict = None, timeout: float = 120) -> Response:
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    req = urllib.request.Request(BASE_URL + path, data=data, method=method)
+    if data is not None:
+        req.add_header("Content-Type", "application/json")
+    for k, v in (headers or {}).items():
+        req.add_header(k, v)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return Response(resp.status, resp.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as exc:
+        return Response(exc.code, exc.read().decode("utf-8", "replace"))
+
+
 def record(name: str, passed: bool, detail: str = "") -> None:
-    status = "PASS" if passed else "FAIL"
     mark = "+" if passed else "X"
     msg = "  [" + mark + "] " + name
     if detail:
@@ -51,10 +78,9 @@ def wait_for_server(timeout: int = 90) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            r = httpx.get(BASE_URL + "/health", timeout=3)
-            if r.status_code == 200:
+            if request("GET", "/health", timeout=3).status_code == 200:
                 return True
-        except Exception:
+        except (urllib.error.URLError, OSError):
             pass
         time.sleep(2)
     return False
@@ -64,31 +90,31 @@ def wait_for_server(timeout: int = 90) -> bool:
 # Test cases
 # ---------------------------------------------------------------------------
 
-def test_health_public(client: httpx.Client) -> None:
+def test_health_public() -> None:
     print("\n-- /health ------------------------------------------")
-    r = client.get("/health")
+    r = request("GET", "/health")
     record("GET /health -> 200", r.status_code == 200, "status=" + str(r.status_code))
     body = r.json()
     record("GET /health body status=ok", body.get("status") == "ok", str(body))
 
 
-def test_auth(client: httpx.Client) -> None:
+def test_auth() -> None:
     print("\n-- Authentication -----------------------------------")
 
-    r = client.get("/info")
+    r = request("GET", "/info")
     record("GET /info no token -> 401", r.status_code == 401, "status=" + str(r.status_code))
     record("  error=unauthorized", r.json().get("error") == "unauthorized", str(r.json()))
 
-    r = client.get("/info", headers=WRONG_HEADERS)
+    r = request("GET", "/info", headers=WRONG_HEADERS)
     record("GET /info wrong token -> 401", r.status_code == 401, "status=" + str(r.status_code))
 
-    r = client.post("/predict", json={"id": "x", "context": "hello world", "question": "what?"})
+    r = request("POST", "/predict", body={"id": "x", "context": "hello world", "question": "what?"})
     record("POST /predict no token -> 401", r.status_code == 401, "status=" + str(r.status_code))
 
 
-def test_info(client: httpx.Client) -> None:
+def test_info() -> None:
     print("\n-- /info --------------------------------------------")
-    r = client.get("/info", headers=AUTH_HEADERS)
+    r = request("GET", "/info", headers=AUTH_HEADERS)
     record("GET /info valid token -> 200", r.status_code == 200, "status=" + str(r.status_code))
     body = r.json()
     for field in ("team", "model", "params", "max_seq_length", "doc_stride"):
@@ -97,27 +123,27 @@ def test_info(client: httpx.Client) -> None:
     record("  doc_stride=128", body.get("doc_stride") == 128)
 
 
-def test_validation(client: httpx.Client) -> None:
+def test_validation() -> None:
     print("\n-- /predict validation ------------------------------")
 
-    r = client.post("/predict", headers=AUTH_HEADERS, json={"context": "hello", "question": "what?"})
+    r = request("POST", "/predict", headers=AUTH_HEADERS, body={"context": "hello", "question": "what?"})
     record("Missing 'id' -> 422", r.status_code == 422, "status=" + str(r.status_code))
     record("  error=bad_request", r.json().get("error") == "bad_request", str(r.json()))
 
-    r = client.post("/predict", headers=AUTH_HEADERS,
-                    json={"id": "t1", "context": "", "question": "what?"})
+    r = request("POST", "/predict", headers=AUTH_HEADERS,
+                body={"id": "t1", "context": "", "question": "what?"})
     record("Empty context -> 422", r.status_code == 422, "status=" + str(r.status_code))
 
-    r = client.post("/predict", headers=AUTH_HEADERS,
-                    json={"id": "t2", "context": "hello world", "question": ""})
+    r = request("POST", "/predict", headers=AUTH_HEADERS,
+                body={"id": "t2", "context": "hello world", "question": ""})
     record("Empty question -> 422", r.status_code == 422, "status=" + str(r.status_code))
 
 
-def test_public_samples(client: httpx.Client) -> None:
+def test_public_samples() -> None:
     print("\n-- /predict public samples --------------------------")
 
     if not PUBLIC_SAMPLES_PATH.exists():
-        print("  WARNING: Public samples not found at " + str(PUBLIC_SAMPLES_PATH) + ", skipping")
+        record("public samples file present", False, str(PUBLIC_SAMPLES_PATH))
         return
 
     samples = json.loads(PUBLIC_SAMPLES_PATH.read_text(encoding="utf-8"))
@@ -128,12 +154,8 @@ def test_public_samples(client: httpx.Client) -> None:
     for s in samples:
         sid = s["id"]
         t0 = time.perf_counter()
-        r = client.post(
-            "/predict",
-            headers=AUTH_HEADERS,
-            json={"id": sid, "context": s["context"], "question": s["question"]},
-            timeout=120,
-        )
+        r = request("POST", "/predict", headers=AUTH_HEADERS,
+                    body={"id": sid, "context": s["context"], "question": s["question"]})
         elapsed_ms = (time.perf_counter() - t0) * 1000
 
         ok_status = r.status_code == 200
@@ -145,11 +167,9 @@ def test_public_samples(client: httpx.Client) -> None:
         record("  id echoed", id_echoed, "got=" + repr(body.get("id")))
         record("  has answer/start/score", has_keys)
 
-        ans = body.get("answer")
-        start = body.get("start")
-        score = body.get("score")
-        ans_str = repr(ans)[:45]
-        print("    answer=" + ans_str + "  start=" + str(start) + "  score=" + str(score) + "  " + str(int(elapsed_ms)) + "ms")
+        ans_str = repr(body.get("answer"))[:45]
+        print("    answer=" + ans_str + "  start=" + str(body.get("start")) + "  score="
+              + str(body.get("score")) + "  " + str(int(elapsed_ms)) + "ms")
 
 
 # ---------------------------------------------------------------------------
@@ -158,35 +178,33 @@ def test_public_samples(client: httpx.Client) -> None:
 
 def main() -> None:
     server_proc = subprocess.Popen(
-        [VENV_PYTHON, "-m", "uvicorn", "api:app", "--port", "8000", "--log-level", "warning"],
-        cwd=str(Path(__file__).resolve().parent),
-        env={**os.environ, "QA_API_TOKEN": TOKEN},
-        stdout=subprocess.PIPE,
+        [sys.executable, "-m", "uvicorn", "api:app", "--host", "127.0.0.1", "--port", "8000",
+         "--log-level", "warning"],
+        cwd=str(PROJECT_ROOT),
+        env=os.environ.copy(),
+        stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
     )
 
-    print("Waiting for server to start and model to load (up to 90 s)...")
-    ready = wait_for_server(timeout=90)
+    try:
+        print("Waiting for server to start and model to load (up to 90 s)...")
+        if not wait_for_server(timeout=90):
+            print("FAIL -- server did not become ready in time.")
+            server_proc.terminate()
+            _, raw = server_proc.communicate(timeout=10)
+            print((raw or b"").decode("utf-8", errors="replace"))
+            sys.exit(1)
 
-    if not ready:
-        raw = server_proc.stderr.read() if server_proc.stderr else b""
-        stderr = raw.decode("utf-8", errors="replace")
-        print("FAIL -- server did not become ready in time.")
-        print(stderr)
-        server_proc.terminate()
-        sys.exit(1)
-
-    print("Server ready -- running tests")
-
-    with httpx.Client(base_url=BASE_URL, timeout=120) as client:
-        test_health_public(client)
-        test_auth(client)
-        test_info(client)
-        test_validation(client)
-        test_public_samples(client)
-
-    server_proc.terminate()
-    server_proc.wait(timeout=10)
+        print("Server ready -- running tests")
+        test_health_public()
+        test_auth()
+        test_info()
+        test_validation()
+        test_public_samples()
+    finally:
+        if server_proc.poll() is None:
+            server_proc.terminate()
+            server_proc.wait(timeout=10)
 
     passed = sum(1 for r in results if r["passed"])
     total = len(results)

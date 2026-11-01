@@ -1,35 +1,52 @@
-"""FastAPI QA service — integrante 3, branch camila/parte3API.
+"""FastAPI extractive-QA service implementing qa_api_contract.yaml.
 
 Endpoints
 ---------
-GET  /health   — public
-GET  /info     — protected (Bearer token)
-POST /predict  — protected (Bearer token)
+GET  /health   - public
+GET  /info     - protected (Bearer token)
+POST /predict  - protected (Bearer token)
 
 Authentication
 --------------
-Token is read exclusively from the QA_API_TOKEN environment variable.
-It is NEVER hard-coded here.
+The token is read exclusively from the QA_API_TOKEN environment variable and is
+never hard-coded. An unset/empty QA_API_TOKEN rejects every protected request.
+
+Concurrency
+-----------
+Run with a single uvicorn worker (one copy of the model in memory). `predict` is
+declared `async def` on purpose: FastAPI runs it on the event loop, so requests
+are processed one at a time, which is required because the fast tokenizer is not
+safe to call from several threads at once. If you ever change it to `def`, add a
+threading.Lock around the model call.
 """
+import hmac
+import logging
 import os
 import threading
 from typing import Any, Dict, Optional
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-# ---------------------------------------------------------------------------
-# App
-# ---------------------------------------------------------------------------
+log = logging.getLogger("qa_api")
+logging.basicConfig(level=logging.INFO)
+
 app = FastAPI(title="NLP QA API", version="1.0.0")
 
+TEAM_NAME = os.environ.get("TEAM_NAME", "team-03")
+if "TEAM_NAME" not in os.environ:
+    log.warning("TEAM_NAME is not set; /info will report the placeholder %r", TEAM_NAME)
+if not os.environ.get("QA_API_TOKEN"):
+    log.warning("QA_API_TOKEN is not set; every protected request will be rejected with 401")
+
 # ---------------------------------------------------------------------------
-# Model loading — single instance, loaded once at startup in a daemon thread
-# so /health can respond immediately while the model is still loading.
+# Model loading: one instance, loaded once at startup in a daemon thread so
+# /health can answer 503 {"status": "loading"} while the model is loading.
 # ---------------------------------------------------------------------------
-_qa: Any = None          # QAInference instance
+_qa: Any = None
 _load_error: Optional[str] = None
 _model_ready = threading.Event()
 
@@ -38,108 +55,145 @@ def _load_model() -> None:
     global _qa, _load_error
     try:
         from inference import QAInference  # noqa: PLC0415
-        _qa = QAInference()
-        _model_ready.set()
+
+        qa = QAInference()
+        # Warm-up so the first real request does not pay one-time initialization costs.
+        qa.predict("Warm-up context sentence.", "What is this?")
+        _qa = qa
+        log.info("Model loaded and warmed up")
     except Exception as exc:  # noqa: BLE001
-        _load_error = str(exc)
-        _model_ready.set()   # unblock waiters even on error
+        _load_error = f"{type(exc).__name__}: {exc}"
+        log.exception("Model failed to load")
+    finally:
+        _model_ready.set()
 
 
 threading.Thread(target=_load_model, daemon=True).start()
 
+
+def _ready() -> bool:
+    return _model_ready.is_set() and _load_error is None and _qa is not None
+
+
 # ---------------------------------------------------------------------------
-# Auth helper
+# Errors: every error body is {"error": "<code>", "detail": "<optional>"}
+# with <code> in {unauthorized, bad_request, internal_error}.
 # ---------------------------------------------------------------------------
-
-def _require_auth(request: Request) -> None:
-    """Raise a 401 JSONResponse if the Bearer token is invalid or missing."""
-    expected = os.environ.get("QA_API_TOKEN", "")
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer ") or auth_header[7:] != expected:
-        raise _Unauthorized()
-
-
 class _Unauthorized(Exception):
-    """Sentinel for 401 errors."""
+    """Raised by the auth dependency; rendered as 401."""
+
+
+def _error(status: int, code: str, detail: Optional[str] = None, headers: Optional[Dict[str, str]] = None):
+    body: Dict[str, Any] = {"error": code}
+    if detail:
+        body["detail"] = detail
+    return JSONResponse(body, status_code=status, headers=headers)
 
 
 @app.exception_handler(_Unauthorized)
 async def _unauthorized_handler(request: Request, exc: _Unauthorized) -> JSONResponse:
-    return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return _error(401, "unauthorized", headers={"WWW-Authenticate": "Bearer"})
 
 
-# Override FastAPI's default 422 Unprocessable Entity to match contract format.
 @app.exception_handler(RequestValidationError)
 async def _validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    # FastAPI parses the body before running dependencies, so a malformed body would
+    # mask a missing/invalid token. Authentication must always be answered first.
+    if request.url.path in ("/info", "/predict"):
+        try:
+            require_auth(request)
+        except _Unauthorized:
+            return _error(401, "unauthorized", headers={"WWW-Authenticate": "Bearer"})
     detail = "; ".join(
-        f"{'.'.join(str(l) for l in e['loc'])}: {e['msg']}"
-        for e in exc.errors()
+        f"{'.'.join(str(part) for part in e['loc'])}: {e['msg']}" for e in exc.errors()
     )
-    return JSONResponse({"error": "bad_request", "detail": detail}, status_code=422)
+    return _error(422, "bad_request", detail)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    # Unknown routes (404), wrong methods (405), etc. must also use the Error schema.
+    code = "unauthorized" if exc.status_code == 401 else (
+        "internal_error" if exc.status_code >= 500 else "bad_request")
+    return _error(exc.status_code, code, str(exc.detail))
+
+
+@app.exception_handler(Exception)
+async def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
+    log.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return _error(500, "internal_error")
 
 
 # ---------------------------------------------------------------------------
-# GET /health — public
+# Auth dependency. FastAPI resolves dependencies before validating the body,
+# so a missing/invalid token always yields 401, even with a malformed body.
 # ---------------------------------------------------------------------------
+def require_auth(request: Request) -> None:
+    expected = os.environ.get("QA_API_TOKEN", "")
+    header = request.headers.get("Authorization", "")
+    # Fail closed: an unset/empty QA_API_TOKEN never authenticates anyone.
+    # Scheme name and token are compared exactly (case-sensitive), in constant time.
+    if (
+        not expected
+        or not header.startswith("Bearer ")
+        or not hmac.compare_digest(header[7:].encode(), expected.encode())
+    ):
+        raise _Unauthorized()
 
+
+# ---------------------------------------------------------------------------
+# GET /health - public
+# ---------------------------------------------------------------------------
 @app.get("/health")
 async def health() -> JSONResponse:
-    """Return 200 when model is ready, 503 while loading or on error."""
-    if _model_ready.is_set() and _load_error is None and _qa is not None:
+    """200 {"status": "ok"} once the model is loaded; 503 {"status": "loading"} otherwise."""
+    if _ready():
         return JSONResponse({"status": "ok"}, status_code=200)
+    body: Dict[str, Any] = {"status": "loading"}
     if _load_error:
-        return JSONResponse({"status": "loading", "detail": _load_error}, status_code=503)
-    return JSONResponse({"status": "loading"}, status_code=503)
+        body["detail"] = _load_error  # extra fields are allowed by the contract
+    return JSONResponse(body, status_code=503)
 
 
 # ---------------------------------------------------------------------------
-# GET /info — protected
+# GET /info - protected
 # ---------------------------------------------------------------------------
-
-@app.get("/info")
-async def info(request: Request) -> JSONResponse:
-    """Return model metadata. Requires valid Bearer token."""
-    _require_auth(request)
-    if not _model_ready.is_set() or _qa is None:
-        return JSONResponse({"error": "internal_error", "detail": "model not ready"}, status_code=503)
-
-    params = sum(p.numel() for p in _qa.model.parameters())
+@app.get("/info", dependencies=[Depends(require_auth)])
+async def info() -> JSONResponse:
+    if not _ready():
+        return _error(503, "internal_error", "model not ready")
     return JSONResponse({
-        "team": os.environ.get("TEAM_NAME", "team-03"),
-        "model": "distilbert/distilbert-base-uncased",
-        "params": params,
+        "team": TEAM_NAME,
+        "model": _qa.base_model_id,
+        "params": sum(p.numel() for p in _qa.model.parameters()),
         "max_seq_length": _qa.max_length,
         "doc_stride": _qa.stride,
     })
 
 
 # ---------------------------------------------------------------------------
-# POST /predict — protected
+# POST /predict - protected
 # ---------------------------------------------------------------------------
-
 class PredictRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # contract: additionalProperties: false
+
     id: str = Field(..., min_length=1, max_length=64)
     context: str = Field(..., min_length=1, max_length=5000)
     question: str = Field(..., min_length=1, max_length=500)
 
 
-@app.post("/predict")
-async def predict(body: PredictRequest, request: Request) -> JSONResponse:
-    """Run extractive QA and return the best answer span (or null)."""
-    _require_auth(request)
-
-    if not _model_ready.is_set() or _qa is None:
-        return JSONResponse(
-            {"error": "internal_error", "detail": "model not ready"},
-            status_code=503,
-        )
-
+@app.post("/predict", dependencies=[Depends(require_auth)])
+async def predict(body: PredictRequest) -> JSONResponse:
+    """Run extractive QA and return the best answer span, or null when there is no answer."""
+    if not _ready():
+        return _error(503, "internal_error", "model not ready")
     try:
         result: Dict[str, Any] = _qa.predict(body.context, body.question)
     except ValueError as exc:
-        return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
-    except Exception as exc:  # noqa: BLE001
-        return JSONResponse({"error": "internal_error", "detail": str(exc)}, status_code=500)
+        return _error(400, "bad_request", str(exc))
+    except Exception:  # noqa: BLE001
+        log.exception("predict failed for id=%s", body.id)
+        return _error(500, "internal_error")
 
     return JSONResponse({
         "id": body.id,
@@ -147,4 +201,3 @@ async def predict(body: PredictRequest, request: Request) -> JSONResponse:
         "start": result["start"],
         "score": result["score"],
     })
-

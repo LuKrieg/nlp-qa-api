@@ -1,3 +1,5 @@
+> Historical handoff; README.md is the source of truth.
+
 # API HANDOFF — Integración, pruebas y despliegue de DistilBERT V2
 
 ## 1. Estado del proyecto
@@ -22,7 +24,7 @@ Se implementó una API de **Question Answering (QA) extractivo** con **FastAPI**
 | `requirements.txt` | Dependencias Python |
 | `qa_api_contract.yaml` | Contrato OpenAPI proporcionado para el proyecto |
 | `INFERENCE_HANDOFF.md` | Instrucciones del módulo de inferencia |
-| `API_HANDOFF.md` | Este documento de transferencia |
+| `API_HANDOFF_actualizado.md` | Este documento de transferencia |
 | `logs/modelo-final-v2/metrics.json` | Métricas y umbral calibrado del modelo V2 |
 | `logs/modelo-final-v2/train_history.json` | Historial de entrenamiento |
 | `logs/modelo-final-v2/loss.png` | Gráfica de pérdida de entrenamiento y validación |

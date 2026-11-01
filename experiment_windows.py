@@ -5,6 +5,7 @@ Method B: max_w(best_score_w) - min_w(null_score_w) [global span minus min null]
 """
 import argparse
 import json
+import os
 import random
 import string
 from pathlib import Path
@@ -13,8 +14,10 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer
 
-MODEL_DIR = Path('weights/modelo-final-v1')
-DATA_PATH = Path('data/validation-v2.0.json')
+BASE_DIR = Path(__file__).resolve().parent
+# Model folder under weights/; override with QA_EXPERIMENT_MODEL=<folder>.
+MODEL_DIR = BASE_DIR / 'weights' / os.environ.get('QA_EXPERIMENT_MODEL', 'modelo-final-v1')
+DATA_PATH = BASE_DIR / 'data' / 'validation-v2.0.json'
 
 
 def cli():

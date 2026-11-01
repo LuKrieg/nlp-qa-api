@@ -5,10 +5,12 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
+BASE_DIR = Path(__file__).resolve().parent
+
 def cli():
     p = argparse.ArgumentParser(description="Plot loss curves from training history.")
-    p.add_argument('--input', default='logs/train_history.json', help='Path to train history JSON file.')
-    p.add_argument('--output', default='logs/loss_curves.png', help='Path to output loss plot image.')
+    p.add_argument('--input', default=str(BASE_DIR / 'logs' / 'modelo-final-v2' / 'train_history.json'), help='Path to train history JSON file.')
+    p.add_argument('--output', default=str(BASE_DIR / 'out' / 'loss_curves.png'), help='Path to output loss plot image.')
     return p.parse_args()
 
 def main():

@@ -9,8 +9,16 @@ import torch
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer
 
 BASE_DIR = Path(__file__).resolve().parent
-MODEL_DIR = BASE_DIR / 'weights' / 'modelo-final-v2'
-METRICS_PATH = BASE_DIR / 'logs' / 'modelo-final-v2' / 'metrics.json'
+# The served model can be switched without code changes: QA_MODEL_NAME=<folder under weights/>.
+# The calibrated no-answer threshold is read from <model folder>/metrics.json, so the model
+# folder is self-contained; the older logs/<name>/metrics.json location is the fallback.
+MODEL_NAME = os.environ.get('QA_MODEL_NAME', 'modelo-final-v3')
+MODEL_DIR = BASE_DIR / 'weights' / MODEL_NAME
+METRICS_PATH = (MODEL_DIR / 'metrics.json') if (MODEL_DIR / 'metrics.json').exists() \
+    else BASE_DIR / 'logs' / MODEL_NAME / 'metrics.json'
+
+# Questions are short in practice; cap them so a huge question can never leave no room for the context.
+MAX_QUESTION_TOKENS = 96
 
 
 class QAInference:
@@ -39,6 +47,14 @@ class QAInference:
         # Load calibrated no-answer threshold from metrics
         metrics = json.loads(metrics_path.read_text(encoding='utf-8'))
         self.no_answer_threshold = float(metrics['no_answer_threshold'])
+        self.base_model_id = str(metrics.get('model', 'distilbert/distilbert-base-uncased'))
+
+    def _clip_question(self, question: str) -> str:
+        """Keep at most MAX_QUESTION_TOKENS tokens of the question (avoids tokenizer truncation errors)."""
+        ids = self.tokenizer(question, add_special_tokens=False)["input_ids"]
+        if len(ids) <= MAX_QUESTION_TOKENS:
+            return question
+        return self.tokenizer.decode(ids[:MAX_QUESTION_TOKENS])
 
     def _tokenize_windows(
         self, context: str, question: str
@@ -48,15 +64,16 @@ class QAInference:
         Returns model input tensors, per-window character offset mappings,
         and per-window sequence_ids to distinguish context tokens.
         """
+        question = self._clip_question(question.lstrip())
         encodings = self.tokenizer(
-            question.lstrip(),
+            question,
             context,
             truncation="only_second",
             max_length=self.max_length,
             stride=self.stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            padding="max_length",
+            padding=True,  # pad to the longest window, not to max_length: same logits, less CPU work
             return_tensors="pt",
         )
 
@@ -73,15 +90,19 @@ class QAInference:
 
     def predict(self, context: str, question: str) -> Dict[str, Any]:
         """Extract best answer span from context or abstain based on calibrated threshold."""
-        if not isinstance(context, str) or not context.strip():
-            raise ValueError("Context must be a non-empty string.")
+        if not isinstance(context, str):
+            raise ValueError("Context must be a string.")
         if len(context) < 1 or len(context) > 5000:
             raise ValueError(f"Context length must be between 1 and 5000 characters (got {len(context)}).")
 
-        if not isinstance(question, str) or not question.strip():
-            raise ValueError("Question must be a non-empty string.")
+        if not isinstance(question, str):
+            raise ValueError("Question must be a string.")
         if len(question) < 1 or len(question) > 500:
             raise ValueError(f"Question length must be between 1 and 500 characters (got {len(question)}).")
+
+        # Whitespace-only input is valid per the API contract (minLength 1) but has nothing to answer from.
+        if not context.strip() or not question.strip():
+            return {"answer": None, "start": None, "score": 1.0}
 
         inputs, offset_mapping, sequence_ids = self._tokenize_windows(context, question)
 
@@ -100,10 +121,10 @@ class QAInference:
             el = end_logits[w]
 
             # Context tokens only
-            valid_indices = [
+            valid_indices = {
                 k for k, sid in enumerate(seq)
                 if sid == 1 and offsets[k][1] > offsets[k][0]
-            ]
+            }
 
             best_span = ("", None)
             best_score = -1e9

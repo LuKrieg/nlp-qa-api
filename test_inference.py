@@ -4,7 +4,7 @@ import string
 from pathlib import Path
 from inference import QAInference
 
-SAMPLE_PATH = Path(r"C:\Users\andre\Desktop\Semana 10 y 11 - NLP + APIs\public_sample.json")
+SAMPLE_PATH = Path(__file__).resolve().parent / "samples" / "public_sample.json"
 
 def norm(s):
     s = ''.join(c for c in (s or '').lower() if c not in string.punctuation)
@@ -21,8 +21,7 @@ def compute_em(pred, ref):
     return float(norm(pred) == norm(ref))
 
 def main():
-    sample_file = SAMPLE_PATH if SAMPLE_PATH.exists() else Path("public_sample.json")
-    data = json.loads(sample_file.read_text(encoding="utf-8"))
+    data = json.loads(SAMPLE_PATH.read_text(encoding="utf-8"))
     
     target_ids = {"sample-01", "sample-02", "sample-05"}
     samples = [item for item in data["items"] if item["id"] in target_ids]

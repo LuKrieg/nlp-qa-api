@@ -1,0 +1,27 @@
+{
+  "model": "distilbert/distilbert-base-uncased",
+  "train_examples": 130319,
+  "validation_examples": 11873,
+  "epochs": 3,
+  "learning_rate": 5e-05,
+  "batch_size": 32,
+  "gradient_accumulation_steps": 1,
+  "max_length": 384,
+  "doc_stride": 128,
+  "training_seconds": 885.6173677444458,
+  "no_answer_threshold": -1.0,
+  "bf16": true,
+  "unanswerable_prior": 0.25,
+  "answerable": {
+    "count": 2993,
+    "EM": 73.67190110257268,
+    "F1": 81.23087893102665
+  },
+  "unanswerable": {
+    "count": 2944,
+    "EM": 49.55842391304348,
+    "F1": 49.55842391304348
+  },
+  "no_answer_threshold_trained_prior25": -3.34375,
+  "threshold_note": "Chosen on SQuAD dev margins: near-optimal at 25% unanswerable and more robust to adversarial unanswerable questions."
+}

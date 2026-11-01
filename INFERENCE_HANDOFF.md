@@ -1,3 +1,5 @@
+> Historical handoff; README.md is the source of truth.
+
 # Entrega del Módulo de Inferencia (Handoff para Integrante 3)
 
 ## 1. Setup y Entorno de Trabajo (Windows PowerShell)

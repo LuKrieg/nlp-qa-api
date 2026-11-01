@@ -1,0 +1,13 @@
+# Keep the build context small and secret-free; weights are mounted at runtime.
+*
+!requirements-serve.txt
+!api.py
+!inference.py
+!smoke_test.py
+!qa_api_contract.yaml
+!logs/
+!samples/
+logs/pilot/
+**/*.png
+**/__pycache__/
+**/*.pyc

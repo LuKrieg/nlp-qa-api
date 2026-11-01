@@ -1,4 +1,7 @@
-"""Regression and benchmark tests for inference.py with modelo-final-v2."""
+"""Regression and benchmark tests for inference.py (in-process, CPU only, no server).
+
+Usage: python test_regression.py   (uses weights/<QA_MODEL_NAME or modelo-final-v3>/)
+"""
 import json
 import os
 import sys
@@ -13,7 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from inference import QAInference
 
-SAMPLE_PATH = Path(r"C:\Users\andre\Desktop\Semana 10 y 11 - NLP + APIs\public_sample.json")
+SAMPLE_PATH = Path(__file__).resolve().parent / "samples" / "public_sample.json"
 
 
 def test_different_working_directory():
@@ -31,11 +34,9 @@ def test_input_validation():
     qa = QAInference()
     invalid_cases = [
         ("", "Valid question?"),
-        ("   ", "Valid question?"),
         (None, "Valid question?"),
         (12345, "Valid question?"),
         ("Valid context", ""),
-        ("Valid context", "   "),
         ("Valid context", None),
         ("Valid context", 123),
         ("A" * 5001, "Valid question?"),
@@ -49,12 +50,19 @@ def test_input_validation():
             pass
         except Exception:
             return False
+    # Whitespace-only input is valid per the contract (minLength 1): it must abstain, not raise.
+    for ctx, q in (("   ", "Valid question?"), ("Valid context", "   ")):
+        try:
+            res = qa.predict(ctx, q)
+        except Exception:
+            return False
+        if res["answer"] is not None or res["start"] is not None:
+            return False
     return True
 
 
 def test_public_sample_and_contract():
-    sample_file = SAMPLE_PATH if SAMPLE_PATH.exists() else PROJECT_ROOT / "public_sample.json"
-    data = json.loads(sample_file.read_text(encoding="utf-8"))
+    data = json.loads(SAMPLE_PATH.read_text(encoding="utf-8"))
     qa = QAInference()
 
     results_detail = []
@@ -118,6 +126,11 @@ def main():
 
     print("\nV2 Predictions & CPU Latency:")
     print(json.dumps(details, indent=2))
+
+    if not (r1 and r2 and r3_ok and r5):
+        if not r3_ok:
+            print(r3_msg)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
