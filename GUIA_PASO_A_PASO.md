@@ -40,7 +40,7 @@ Usa **una** herramienta y deja instalada y probada una **segunda** como respaldo
 
 ```bash
 # ngrok (una vez: ngrok config add-authtoken <tu authtoken>)
-ngrok http 8000
+ngrok http --url=diffusion-briskly-craftily.ngrok-free.dev 127.0.0.1:800
 
 # Cloudflare Quick Tunnel (no necesita cuenta; la URL cambia cada vez que lo reinicias)
 cloudflared tunnel --url http://localhost:8000

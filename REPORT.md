@@ -4,11 +4,11 @@
 
 | Field | Value |
 |---|---|
-| Team id | `FILL: team name registered with the instructor (no spaces)` |
-| Members | Oliver, Camila, Enrique, Lucy `FILL: full names` |
+| Team id | `Kasane` |
+| Members | Oliver, Camila, Enrique, Lucy |
 | Repository URL | https://github.com/LuKrieg/nlp-qa-api |
 | `submission` commit hash | The commit tagged `submission` (a report cannot contain the hash of its own commit). |
-| Public service URL used at the dry run | `FILL: tunnel URL used at the dry run` |
+| Public service URL used at the dry run | `https://diffusion-briskly-craftily.ngrok-free.dev (fixed ngrok domain)` |
 | AI tools used (which, and for what) | `FILL: the team must disclose every AI tool used and for what` |
 
 ## 1. Model choice and justification
@@ -44,7 +44,7 @@
 - **Model loading:** a background thread loads the model once at start-up and runs a warm-up prediction. `/health` returns `503 {"status":"loading"}` until then, and `200 {"status":"ok"}` after.
 - **Request flow:** `/predict` checks the token, validates the body (extra fields rejected), splits question and context into overlapping 384-token windows (stride 128), runs DistilBERT on CPU, keeps the best span per window (up to 30 tokens), picks the window with the highest margin and applies the threshold. Offsets map back to the original string, so `context[start:start+len(answer)] == answer` always holds. Questions over 96 tokens are clipped.
 - **Access control:** `require_auth` runs before body validation. The token comes only from `QA_API_TOKEN`, compared with `hmac.compare_digest`; an unset or empty variable rejects every request with `401 {"error":"unauthorized"}`. `/health` is public.
-- **Tunnel:** ngrok (`ngrok http 8000`) as primary and Cloudflare Quick Tunnel (`cloudflared tunnel --url http://localhost:8000`) as backup. `FILL: confirm both after the dry run`.
+- **Tunnel:** ngrok (`ngrok http 8000`) as primary and Cloudflare Quick Tunnel (`cloudflared tunnel --url http://localhost:8000`) as backup. `ngrok with a fixed domain (ngrok http --url=diffusion-briskly-craftily.ngrok-free.dev 127.0.0.1:8000) as primary and Cloudflare Quick Tunnel as backup`.
 - **How to run** from a clean machine (details in `README.md`; weights are distributed outside git):
 
 ```bash
