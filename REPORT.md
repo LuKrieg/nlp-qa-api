@@ -79,9 +79,9 @@ sample-04 asks about BERT-base while the context reports LoRA results for GPT-3:
 ## 7. Problems encountered and how you fixed them
 
 1. **Problem:** v2 (trained on 40,000 of 130,319 questions) answered the contract's example "How long is the Lempa River?" with "longest" and scored 0.58 on our 48-question set. **Cause:** too little training data. **Fix:** retrained on the full SQuAD 2.0 train set and re-calibrated the threshold; the set score rose to 0.77. **Commit:** `bb13389`
-2. **Problem:** a 500-character question made the API return `500`. **Cause:** the tokenizer fails when the question leaves no room for the context. **Fix:** questions are clipped to 96 tokens (`inference.py`). **Commit:** `FILL: commit hash`
-3. **Problem:** an invalid JSON body without token returned `422` instead of `401`, and an unset `QA_API_TOKEN` accepted the header `Bearer `. **Cause:** FastAPI parses the body before dependencies, and the expected token was empty. **Fix:** authentication is answered first and fails closed. **Commit:** `FILL: commit hash`
-4. **Problem:** the repository held a duplicated `.git - Copy/` folder, Windows-only paths and a hard-coded default test token in the tests. **Cause:** files copied between machines. **Fix:** removed in a new commit (history preserved); tests now require `QA_API_TOKEN` and use relative paths. **Commit:** `FILL: commit hash`
+2. **Problem:** a 500-character question made the API return `500`. **Cause:** the tokenizer fails when the question leaves no room for the context. **Fix:** questions are clipped to 96 tokens (`inference.py`). **Commit:** `bb13389`
+3. **Problem:** an invalid JSON body without token returned `422` instead of `401`, and an unset `QA_API_TOKEN` accepted the header `Bearer `. **Cause:** FastAPI parses the body before dependencies, and the expected token was empty. **Fix:** authentication is answered first and fails closed. **Commit:** `bb13389`
+4. **Problem:** the repository held a duplicated `.git - Copy/` folder, Windows-only paths and a hard-coded default test token in the tests. **Cause:** files copied between machines. **Fix:** removed in a new commit (history preserved); tests now require `QA_API_TOKEN` and use relative paths. **Commit:** `bb13389`
 
 ## 8. Decoder investigation
 
