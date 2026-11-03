@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DistilBERT V3 | Question Answering</title>
+    <style>
+        :root {
+            --azul: #315cdd;
+            --texto: #17243b;
+            --gris: #65748b;
+            --fondo: #f5f7fc;
+            --borde: #e3e8f1;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: var(--fondo);
+            color: var(--texto);
+        }
+
+        header {
+            background: white;
+            border-bottom: 1px solid var(--borde);
+            padding: 20px 7%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-size: 21px;
+            font-weight: 750;
+        }
+
+        .logo span {
+            color: var(--azul);
+        }
+
+        .estado {
+            font-size: 13px;
+            color: var(--gris);
+        }
+
+        .punto {
+            display: inline-block;
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #e2a039;
+            margin-right: 7px;
+        }
+
+        .punto.ok {
+            background: #20a66b;
+        }
+
+        main {
+            max-width: 1080px;
+            margin: 48px auto;
+            padding: 0 22px;
+        }
+
+        h1 {
+            font-size: clamp(28px, 4vw, 42px);
+            margin: 0 0 12px;
+            letter-spacing: -1px;
+        }
+
+        .subtitulo {
+            color: var(--gris);
+            margin-bottom: 32px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 22px;
+        }
+
+        .card {
+            background: white;
+            padding: 27px;
+            border: 1px solid var(--borde);
+            border-radius: 18px;
+            box-shadow: 0 5px 18px #24345408;
+        }
+
+        h2 {
+            font-size: 17px;
+            margin: 0 0 23px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 9px;
+        }
+
+        textarea,
+        input {
+            width: 100%;
+            border: 1px solid #d6deea;
+            border-radius: 10px;
+            padding: 14px;
+            font: inherit;
+            outline: none;
+            background: #fafbfe;
+        }
+
+        textarea {
+            height: 235px;
+            resize: vertical;
+        }
+
+        textarea:focus,
+        input:focus {
+            border-color: var(--azul);
+        }
+
+        .campo {
+            margin-bottom: 23px;
+        }
+
+        button {
+            border: none;
+            background: var(--azul);
+            color: white;
+            border-radius: 10px;
+            padding: 15px 22px;
+            width: 100%;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+
+        .resultado {
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .respuesta {
+            font-size: 28px;
+            font-weight: 750;
+            color: var(--azul);
+            overflow-wrap: anywhere;
+        }
+
+        .muted {
+            color: var(--gris);
+            line-height: 1.6;
+        }
+
+        .metricas {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .metrica {
+            flex: 1;
+            background: var(--fondo);
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .metrica strong {
+            display: block;
+            font-size: 19px;
+        }
+
+        .metrica small {
+            color: var(--gris);
+        }
+
+        .contexto-resaltado {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            line-height: 1.8;
+            font-size: 14px;
+            max-height: 270px;
+            overflow: auto;
+        }
+
+        mark {
+            background: #dce5ff;
+            color: #1746bc;
+            border-radius: 3px;
+            padding: 2px;
+        }
+
+        .ayuda {
+            font-size: 12px;
+            color: var(--gris);
+        }
+
+        .error {
+            color: #b42332;
+            font-size: 14px;
+        }
+
+        footer {
+            text-align: center;
+            font-size: 12px;
+            color: var(--gris);
+            padding: 32px;
+        }
+
+        @media(max-width: 780px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            main {
+                margin-top: 28px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">DistilBERT <span>V3</span></div>
+        <div class="estado">
+            <span class="punto" id="punto"></span>
+            <span id="estado">Comprobando servidor...</span>
+        </div>
+    </header>
+
+    <main>
+        <h1>Question Answering</h1>
+        <p class="subtitulo">
+            Sistema de preguntas y respuestas basado en Transformers.
+            Inferencia extractiva mediante DistilBERT V3.
+        </p>
+
+        <div class="grid">
+            <section class="card">
+                <h2>Realizar una consulta</h2>
+
+                <form id="formulario">
+                    <div class="campo">
+                        <label for="contexto">Contexto en inglés</label>
+                        <textarea id="contexto" maxlength="5000"
+                            required>The Lempa River is the longest river in El Salvador, flowing about 422 km from Guatemala to the Pacific Ocean.</textarea>
+                        <p class="ayuda">Máximo 5,000 caracteres.</p>
+                    </div>
+
+                    <div class="campo">
+                        <label for="pregunta">Pregunta</label>
+                        <input id="pregunta" maxlength="500" required value="How long is the Lempa River?">
+                    </div>
+
+                    <button id="consultar" type="submit">
+                        Consultar modelo
+                    </button>
+                </form>
+            </section>
+
+            <section>
+                <div class="card">
+                    <h2>Respuesta del modelo</h2>
+                    <div class="resultado">
+                        <div class="respuesta" id="respuesta">—</div>
+                        <p class="muted" id="mensaje">
+                            Ingresa una pregunta para comenzar.
+                        </p>
+                    </div>
+
+                    <div class="metricas">
+                        <div class="metrica">
+                            <strong id="score">—</strong>
+                            <small>Score del modelo</small>
+                        </div>
+                        <div class="metrica">
+                            <strong id="tiempo">—</strong>
+                            <small>Tiempo de respuesta</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top:22px">
+                    <h2>Respuesta dentro del contexto</h2>
+                    <div class="contexto-resaltado muted" id="resaltado">
+                        El fragmento identificado aparecerá resaltado aquí.
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer>
+        DistilBERT V3 · FastAPI · Inferencia en CPU · SQuAD 2.0
+    </footer>
+
+    <script>
+        const $ = id => document.getElementById(id);
+
+        async function comprobarServidor() {
+            try {
+                const r = await fetch("/demo/health");
+                const data = await r.json();
+                const ok = r.ok && data.status === "ok";
+                $("estado").textContent = ok
+                    ? "Servidor conectado" : "Servidor no disponible";
+                $("punto").classList.toggle("ok", ok);
+            } catch {
+                $("estado").textContent = "Sin conexión";
+                $("punto").classList.remove("ok");
+            }
+        }
+
+        $("formulario").addEventListener("submit", async event => {
+            event.preventDefault();
+
+            const contexto = $("contexto").value;
+            const pregunta = $("pregunta").value;
+            const boton = $("consultar");
+
+            boton.disabled = true;
+            boton.textContent = "Procesando...";
+            $("respuesta").textContent = "...";
+            $("mensaje").textContent = "Consultando DistilBERT V3";
+            $("resaltado").textContent = "";
+            $("score").textContent = "—";
+            $("tiempo").textContent = "—";
+
+            const inicio = performance.now();
+
+            try {
+                const respuesta = await fetch("/demo/predict", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        id: "demo-001",
+                        context: contexto,
+                        question: pregunta
+                    })
+                });
+
+                const data = await respuesta.json();
+                if (!respuesta.ok) {
+                    throw new Error(data.detail || data.error ||
+                        `Error HTTP ${respuesta.status}`);
+                }
+
+                const tiempo = Math.round(performance.now() - inicio);
+                $("tiempo").textContent = tiempo + " ms";
+
+                const score = Number(data.score);
+                $("score").textContent = Number.isFinite(score)
+                    ? score.toFixed(3) : "—";
+
+                if (data.answer === null) {
+                    $("respuesta").textContent = "NULL";
+                    $("mensaje").textContent =
+                        "El modelo no encontró una respuesta respaldada por el contexto.";
+                    $("resaltado").textContent = contexto;
+                } else {
+                    $("respuesta").textContent = data.answer;
+                    $("mensaje").textContent = "Respuesta extractiva identificada";
+
+                    const start = data.start;
+                    const answer = data.answer;
+
+                    if (Number.isInteger(start) && start >= 0 &&
+                        contexto.slice(start, start + answer.length) === answer) {
+                        const contenedor = $("resaltado");
+                        contenedor.textContent = "";
+                        contenedor.append(document.createTextNode(
+                            contexto.slice(0, start)
+                        ));
+                        const marca = document.createElement("mark");
+                        marca.textContent = answer;
+                        contenedor.append(marca);
+                        contenedor.append(document.createTextNode(
+                            contexto.slice(start + answer.length)
+                        ));
+                    } else {
+                        $("resaltado").textContent = contexto;
+                    }
+                }
+            } catch (error) {
+                $("respuesta").textContent = "Error";
+                $("mensaje").textContent = error.message;
+                $("mensaje").className = "error";
+            } finally {
+                boton.disabled = false;
+                boton.textContent = "Consultar modelo";
+            }
+        });
+
+        comprobarServidor();
+    </script>
+</body>
+
+</html>
